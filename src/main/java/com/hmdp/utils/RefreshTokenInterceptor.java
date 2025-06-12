@@ -11,6 +11,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static com.hmdp.utils.RedisConstants.LOGIN_USER_KEY;
+
 public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     private StringRedisTemplate stringRedisTemplate;
@@ -29,11 +31,11 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 1. 获取请求头中的token
         String token = request.getHeader("authorization");
-        if (StrUtil.isBlank(token)){
+        if (StrUtil.isBlank(token)) {
             return true;
         }
         // 2. 基于Token获取redis中的用户
-        String key = RedisConstants.LOGIN_USER_KEY + token;
+        String key = LOGIN_USER_KEY + token;
         Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(key);
 
         // 3. 判断用户是否存在

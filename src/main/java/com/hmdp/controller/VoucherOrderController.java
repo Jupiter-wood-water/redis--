@@ -26,6 +26,12 @@ public class VoucherOrderController {
 
     @Resource
     private IVoucherOrderService iVoucherOrderService;
+
+    /**
+     * 回显秒杀券
+     * @param voucherId
+     * @return
+     */
     @PostMapping("seckill/{id}")
     public Result seckillVoucher(@PathVariable("id") Long voucherId) {
         return iVoucherOrderService.seckiiVoucher(voucherId);

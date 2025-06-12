@@ -42,17 +42,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     @Override
     public Result sendCode(String phone, HttpSession session) {
-        // 1.验证手机号
-        if (RegexUtils.isPhoneInvalid(phone)){
+        // 1.校验手机号
+        if (RegexUtils.isPhoneInvalid(phone)) {
             // 2.如果不符合，返回错误信息
-            return Result.fail("手机格式错误");
+            return Result.fail("手机号格式错误！");
         }
-        // 3.如果符合，生成验证码
+        // 3.符合，生成验证码
         String code = RandomUtil.randomNumbers(6);
-        // 4.保存验证码到 redis // set key value ex 100
-        stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL , TimeUnit.MINUTES);
+
+        // 4.保存验证码到 session
+        stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL, TimeUnit.MINUTES);
+
         // 5.发送验证码
-        log.debug("发送短信验证码成功，验证码:{}", code);
+        log.debug("发送短信验证码成功，验证码：{}", code);
         // 返回ok
         return Result.ok();
     }
@@ -68,7 +70,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 3. 从redis中获取验证码并校验
         String cacheCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
         String code = loginForm.getCode();
-        if (cacheCode == null || !cacheCode.equals(code)){
+        if (cacheCode == null || !cacheCode.equals(code)) {
             // 验证码不一致或未获取验证码，报错
             return Result.fail("验证码错误");
         }
@@ -82,20 +84,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             user = createUserWithPhone(phone);
         }
         // 7.保存用户信息到 redis 中
-        // 7.1 随机生成token，作为登录令牌, isSimple设置uuid没有中斜线 -
+        // 7.1.随机生成token，作为登录令牌
         String token = UUID.randomUUID().toString(true);
-        // 7.2 将User对象转化为HashMap存储
+        // 7.2.将User对象转为HashMap存储
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
         Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
                 // 以下看不懂，总之是让hashmap中的所有值都为string
                 CopyOptions.create()
                         .setIgnoreNullValue(true)
-                        .setFieldValueEditor((fieldName,fieldValue) -> fieldValue.toString()));
-        // 7.3 存储
+                        .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
+        // 7.3.存储
         String tokenKey = LOGIN_USER_KEY + token;
-        stringRedisTemplate.opsForHash().putAll( tokenKey , userMap);
-        // 7.4 设置token有效期
-        stringRedisTemplate.expire(tokenKey, LOGIN_USER_TTL , TimeUnit.MINUTES);
+        stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
+        // 7.4.设置token有效期
+        stringRedisTemplate.expire(tokenKey, LOGIN_USER_TTL, TimeUnit.MINUTES);
 
         // 8.返回token
         return Result.ok(token);
