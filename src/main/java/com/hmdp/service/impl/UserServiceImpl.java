@@ -63,15 +63,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     public Result login(LoginFormDTO loginForm, HttpSession session) {
         // 1.校验手机号
         String phone = loginForm.getPhone();
-        if (RegexUtils.isPhoneInvalid(phone)){
-            // 2. 如果不符合，返回错误信息
-            return Result.fail("手机格式错误");
+        if (RegexUtils.isPhoneInvalid(phone)) {
+            // 2.如果不符合，返回错误信息
+            return Result.fail("手机号格式错误！");
         }
-        // 3. 从redis中获取验证码并校验
+        // 3.从redis获取验证码并校验
         String cacheCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
         String code = loginForm.getCode();
         if (cacheCode == null || !cacheCode.equals(code)) {
-            // 验证码不一致或未获取验证码，报错
+            // 不一致，报错
             return Result.fail("验证码错误");
         }
 
@@ -79,11 +79,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         User user = query().eq("phone", phone).one();
 
         // 5.判断用户是否存在
-        if (user == null){
-            // 6.不存在，创建用户并保存
+        if (user == null) {
+            // 6.不存在，创建新用户并保存
             user = createUserWithPhone(phone);
         }
-        // 7.保存用户信息到 redis 中
+
+        // 7.保存用户信息到 redis中
         // 7.1.随机生成token，作为登录令牌
         String token = UUID.randomUUID().toString(true);
         // 7.2.将User对象转为HashMap存储
