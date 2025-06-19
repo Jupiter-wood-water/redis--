@@ -4,6 +4,7 @@ import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
@@ -11,13 +12,20 @@ import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisData;
+import com.hmdp.utils.SystemConstants;
+import org.springframework.data.geo.Distance;
+import org.springframework.data.geo.GeoResult;
+import org.springframework.data.geo.GeoResults;
+import org.springframework.data.redis.connection.RedisGeoCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.domain.geo.GeoReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 
 import java.time.LocalDateTime;
+import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -224,5 +232,68 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // 2.删除缓存
         stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
         return Result.ok();
+    }
+
+    @Override
+    public Result queryShopByType(Integer typeId, Integer current, Double x, Double y) {
+        // 1.判断是否需要根据坐标查询
+        if (x == null || y == null) {
+            // 不需要坐标查询，按数据库查询
+            Page<Shop> page = query()
+                    .eq("type_id", typeId)
+                    .page(new Page<>(current, SystemConstants.DEFAULT_PAGE_SIZE));
+            // 返回数据
+            return Result.ok(page.getRecords());
+        }
+        // 2.计算分页参数
+        int from = (current - 1) * SystemConstants.DEFAULT_PAGE_SIZE;
+        int end = current * SystemConstants.DEFAULT_PAGE_SIZE;
+
+        // 3.查询redis，按照距离排序、分页。结果返回：shopId、distance
+        String key = SHOP_GEO_KEY + typeId;
+        // results 包含 1.一定范围内的所有店铺 2.店铺到中心的平均距离
+        GeoResults<RedisGeoCommands.GeoLocation<String>> results = stringRedisTemplate.opsForGeo()
+                .search(
+                        key,
+                        GeoReference.fromCoordinate(x, y),
+                        new Distance(5000),
+                        // 以下执行geo命令，返回end之前的所有数据，因此需要手动skip数据
+                        RedisGeoCommands.GeoSearchCommandArgs.newGeoSearchArgs().includeDistance().limit(end)
+                );
+        // 4.解析出id
+        if (results == null) {
+            return Result.ok(Collections.emptyList());
+        }
+        // list集合包含所有店铺
+        List<GeoResult<RedisGeoCommands.GeoLocation<String>>> list = results.getContent();
+        // 起始的位置大于商铺数量
+        if (list.size() <= from) {
+            // 没有下一页了，结束
+            return Result.ok(Collections.emptyList());
+        }
+        // 4.1 截取 from ~ end 的部分
+        // ids集合，用于存储所有店铺id
+        List<Long> ids = new ArrayList<>(list.size());
+        // distanceMap集合，用于存储所有店铺距离
+        Map<String, Distance> distanceMap = new HashMap<>(list.size());
+        // GeoResult对应的result 包含店铺信息和店铺距离
+        list.stream().skip(from).forEach(result -> {
+            // 4.2获取店铺id
+            // result.getContent()得到店铺的具体信息，包含名称和坐标。getName()获得名称，在存储时，因为用id表示了名称，所以getname得到数字字符串
+            String shopIdStr = result.getContent().getName();
+            ids.add(Long.valueOf(shopIdStr));
+            // 4.3获取距离
+            Distance distance = result.getDistance();
+            distanceMap.put(shopIdStr, distance);
+        });
+        // 5.根据id查询shop
+        String idStr = StrUtil.join(",", ids);
+        List<Shop> shops = query().in("id", ids).last("ORDER BY FIELD(id," + idStr + ")").list();
+        for (Shop shop : shops) {
+            // distance源码中，距离表示为private final double value;所以最后getValue
+            shop.setDistance(distanceMap.get(shop.getId().toString()).getValue());
+        }
+        // 6.返回数据
+        return Result.ok(shops);
     }
 }

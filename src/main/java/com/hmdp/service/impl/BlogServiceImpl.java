@@ -211,6 +211,10 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         return Result.ok(r);
     }
 
+    /**
+     * 查询blog有关的用户
+     * @param blog
+     */
     private void queryBlogUser(Blog blog) {
         Long userId = blog.getUserId();
         User user = userService.getById(userId);

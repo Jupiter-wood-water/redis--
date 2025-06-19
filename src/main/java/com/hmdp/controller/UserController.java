@@ -71,6 +71,11 @@ public class UserController {
         return Result.ok(user);
     }
 
+    /**
+     * 查看用户信息
+     * @param userId
+     * @return
+     */
     @GetMapping("/info/{id}")
     public Result info(@PathVariable("id") Long userId){
         // 查询详情
@@ -85,7 +90,11 @@ public class UserController {
         return Result.ok(info);
     }
 
-    // 根据id查询用户
+    /**
+     * 根据id查询用户
+     * @param userId
+     * @return
+     */
     @GetMapping("/{id}")
     public Result queryUserById(@PathVariable("id") Long userId){
         // 查询详情
@@ -96,6 +105,24 @@ public class UserController {
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
         // 返回
         return Result.ok(userDTO);
+    }
+
+    /**
+     * 用户签到
+     * @return
+     */
+    @PostMapping("/sign")
+    public Result sign(){
+        return userService.sign();
+    }
+
+    /**
+     * 统计用户连续签到次数
+     * @return
+     */
+    @GetMapping("/sign/count")
+    public Result signCount(){
+        return userService.signCount();
     }
 
 }
